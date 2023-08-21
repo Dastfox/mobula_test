@@ -1,0 +1,11 @@
+{
+  "dependencies": {
+    "graphql-request": "^6.1.0",
+    "moment": "^2.29.4",
+    "web3": "^4.1.0"
+  },
+  "devDependencies": {
+    "@types/moment": "^2.13.0",
+    "typescript": "^5.1.6"
+  }
+}

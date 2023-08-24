@@ -1,7 +1,7 @@
 import { GraphQLClient } from 'graphql-request';
 
 // Subgraph endpoint (replace with the correct endpoint)
-const endpoint = 'https://api.thegraph.com/subgraphs/name/somemoecoding/surgeswap-v1-cg-bsc';
+const endpoint = 'https://api.thegraph.com/subgraphs/name/somemoecoding/surgeswap-v2';
 
 const genesisBlockNumber = 24725999;
 
@@ -23,6 +23,7 @@ web3.eth.getBlockNumber().then((blockNumber) => {
 type Query = {
 	ticker?: Ticker;
 	tickers?: Ticker[];
+	token?: Token;
 };
 
 type Ticker = {
@@ -31,17 +32,58 @@ type Ticker = {
 	base_volume: number;
 };
 
-async function getBlockTimestamp(blockNumber: number): Promise<number> {
-	const block = await web3.eth.getBlock(blockNumber);
-	return Number(block.timestamp);
-}
+type Token = {
+	name: string;
+	tokenDayData: TokenDayData[];
+};
+
+type TokenDayData = {
+	id: string;
+	date: number;
+	priceUSD: number;
+	dailyVolumeUSD: number;
+	totalLiquidityUSD: number;
+};
+
+type priceHistory = {
+	timestamp: number;
+	priceUSD: number;
+};
+
+type volumeHistory = {
+	timestamp: number;
+	volumeUSD: number;
+};
+
+type liquidityHistory = {
+	timestamp: number;
+	liquidityUSD: number;
+};
+
+type finalData = {
+	priceHistory?: priceHistory[];
+	volumeHistory?: volumeHistory[];
+	liquidityHistory?: liquidityHistory[];
+};
 
 // Function to retrieve price history
-async function getPriceHistory(tokenId: string, blockNumber: number): Promise<any[]> {
-	const query = `
-{
-  ticker(id: "${tokenId}", block: {number: ${blockNumber}}) {
-    last_price
+async function getPriceHistory(tokenId: string, blockNumber: number): Promise<finalData> {
+	var finalData: finalData = {
+		priceHistory: [],
+		volumeHistory: [],
+		liquidityHistory: [],
+	};
+
+	const query = `{
+  token(id: "${tokenId}") {
+    name
+    tokenDayData {
+      id
+      date
+      priceUSD
+      dailyVolumeUSD
+      totalLiquidityUSD
+    }
   }
 }
  `;
@@ -49,77 +91,32 @@ async function getPriceHistory(tokenId: string, blockNumber: number): Promise<an
 	// Fetch data from the subgraph
 	const data: Query = await client.request(query);
 
-	// Process and return the price
-	// Return as an array of arrays to match the expected return type
-	return [[data.ticker?.last_price]];
+	if (!data.token) {
+		return finalData;
+	}
+
+	for (let i = 0; i < data.token?.tokenDayData.length; i++) {
+		finalData.priceHistory?.push({
+			timestamp: data.token.tokenDayData[i].date,
+			priceUSD: data.token.tokenDayData[i].priceUSD,
+		});
+		finalData.volumeHistory?.push({
+			timestamp: data.token.tokenDayData[i].date,
+			volumeUSD: data.token.tokenDayData[i].dailyVolumeUSD,
+		});
+		finalData.liquidityHistory?.push({
+			timestamp: data.token.tokenDayData[i].date,
+			liquidityUSD: data.token.tokenDayData[i].totalLiquidityUSD,
+		});
+	}
+	return finalData;
 }
-
-async function getVolumeHistory(tokenId: string): Promise<any> {
-	// Query current volume
-	const currentQuery = `
-    {
-      ticker(id: "${tokenId}") {
-        base_volume
-      }
-    }
-  `;
-
-	const currentVolumeData: Query = await client.request(currentQuery);
-	const currentVolume = currentVolumeData.ticker ? Number(currentVolumeData.ticker.base_volume) : 0;
-
-	// Calculate the block number 24 hours ago
-	const blockNumber24HoursAgo = blockNumberVar - 24 * 60 * 60;
-	console.log('blockNumber24HoursAgo', blockNumber24HoursAgo);
-
-	// Query volume 24 hours ago
-	const pastQuery = `
-    {
-      ticker(id: "${tokenId}", block: {number: ${blockNumber24HoursAgo}}) {
-        base_volume
-      }
-    }
-  `;
-
-	const pastVolumeData: Query = await client.request(pastQuery);
-
-	const pastVolume = pastVolumeData.ticker ? Number(pastVolumeData.ticker.base_volume) : 0;
-
-	const dayVolume = currentVolume - pastVolume;
-	console.log('volumes', 'currentVolumeData', currentVolumeData, 'pastVolumeData', pastVolumeData);
-	console.log('dayVolume', dayVolume);
-
-	// Calculate and return 24-hour volume
-	return dayVolume;
-}
-
-// Function to retrieve liquidity history
-async function getLiquidityHistory(tokenId: string): Promise<any[]> {
-	const query = `
-    {
-      ticker(id: "${tokenId}") {
-        liquidity_in_usd
-      }
-    }
-  `;
-
-	// Fetch data from the subgraph
-	const data: any = await client.request(query);
-	console.log('DATA 74', data);
-
-	// Process and return the liquidity history
-	return data.ticker.map((item: any) => [item.timestamp, item.liquidity_in_usd]);
-}
-
 const exampleTokenId = '0x43C3EBaFdF32909aC60E80ee34aE46637E743d65';
+const exampleTokenIdLower = exampleTokenId.toLowerCase();
 
 async function main() {
-	const priceHistory = await getPriceHistory(exampleTokenId, genesisBlockNumber);
-	const volumeHistory = await getVolumeHistory(exampleTokenId);
-	const liquidityHistory = await getLiquidityHistory(exampleTokenId);
-
-	console.log('Price History:', priceHistory);
-	console.log('Volume History:', volumeHistory);
-	console.log('Liquidity History:', liquidityHistory);
+	const priceHistory = await getPriceHistory(exampleTokenIdLower, genesisBlockNumber);
+	console.log('priceHistory', priceHistory);
 }
 
 main().catch(console.error);

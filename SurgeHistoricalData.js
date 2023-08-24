@@ -14,7 +14,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const graphql_request_1 = require("graphql-request");
 // Subgraph endpoint (replace with the correct endpoint)
-const endpoint = 'https://api.thegraph.com/subgraphs/name/somemoecoding/surgeswap-v1-cg-bsc';
+const endpoint = 'https://api.thegraph.com/subgraphs/name/somemoecoding/surgeswap-v2';
 const genesisBlockNumber = 24725999;
 const client = new graphql_request_1.GraphQLClient(endpoint);
 const moment = require('moment');
@@ -33,21 +33,52 @@ function getBlockTimestamp(blockNumber) {
 }
 // Function to retrieve price history
 function getPriceHistory(tokenId, blockNumber) {
-    var _a;
+    var _a, _b, _c, _d;
     return __awaiter(this, void 0, void 0, function* () {
-        const query = `
-{
-  ticker(id: "${tokenId}", block: {number: ${blockNumber}}) {
-    last_price
+        var finalData = {
+            priceHistory: [],
+            volumeHistory: [],
+            liquidityHistory: [],
+        };
+        const query = `{
+  token(id: "${tokenId}") {
+    name
+    tokenDayData {
+      id
+      date
+      priceUSD
+      dailyVolumeUSD
+      totalLiquidityUSD
+    }
   }
 }
  `;
         // Fetch data from the subgraph
         const data = yield client.request(query);
+        if (!data.token) {
+            return finalData;
+        }
+        for (let i = 0; i < ((_a = data.token) === null || _a === void 0 ? void 0 : _a.tokenDayData.length); i++) {
+            (_b = finalData.priceHistory) === null || _b === void 0 ? void 0 : _b.push({
+                timestamp: data.token.tokenDayData[i].date,
+                priceUSD: data.token.tokenDayData[i].priceUSD,
+            });
+            (_c = finalData.volumeHistory) === null || _c === void 0 ? void 0 : _c.push({
+                timestamp: data.token.tokenDayData[i].date,
+                volumeUSD: data.token.tokenDayData[i].dailyVolumeUSD,
+            });
+            (_d = finalData.liquidityHistory) === null || _d === void 0 ? void 0 : _d.push({
+                timestamp: data.token.tokenDayData[i].date,
+                liquidityUSD: data.token.tokenDayData[i].totalLiquidityUSD,
+            });
+        }
         // Process and return the price
         // Return as an array of arrays to match the expected return type
-        return [[(_a = data.ticker) === null || _a === void 0 ? void 0 : _a.last_price]];
+        return finalData;
     });
+}
+function getDateFromTimestamp(timestamp) {
+    return moment.unix(timestamp).format('YYYY-MM-DD HH:mm:ss');
 }
 function getVolumeHistory(tokenId) {
     return __awaiter(this, void 0, void 0, function* () {
@@ -99,14 +130,16 @@ function getLiquidityHistory(tokenId) {
     });
 }
 const exampleTokenId = '0x43C3EBaFdF32909aC60E80ee34aE46637E743d65';
+const exampleTokenIdLower = exampleTokenId.toLowerCase();
 function main() {
     return __awaiter(this, void 0, void 0, function* () {
-        const priceHistory = yield getPriceHistory(exampleTokenId, genesisBlockNumber);
-        const volumeHistory = yield getVolumeHistory(exampleTokenId);
-        const liquidityHistory = yield getLiquidityHistory(exampleTokenId);
-        console.log('Price History:', priceHistory);
-        console.log('Volume History:', volumeHistory);
-        console.log('Liquidity History:', liquidityHistory);
+        const priceHistory = yield getPriceHistory(exampleTokenIdLower, genesisBlockNumber);
+        console.log('priceHistory', priceHistory);
+        // const volumeHistory = await getVolumeHistory(exampleTokenId);
+        // const liquidityHistory = await getLiquidityHistory(exampleTokenId);
+        // console.log('Price History:', priceHistory);
+        // console.log('Volume History:', volumeHistory);
+        // console.log('Liquidity History:', liquidityHistory);
     });
 }
 main().catch(console.error);
